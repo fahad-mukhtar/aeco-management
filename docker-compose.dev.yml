@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: factory_admin
+      POSTGRES_PASSWORD: factory_admin
+      POSTGRES_DB: factory_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  user-service:
+    build:
+      context: .
+      dockerfile: ./backend-services/user-service/Dockerfile.dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    environment:
+      USER_SERVICE_DEBUG: "True"
+      USER_SERVICE_DATABASE_HOST: postgres
+      USER_SERVICE_DATABASE_PORT: 5432
+      USER_SERVICE_DATABASE_USER: factory_admin
+      USER_SERVICE_DATABASE_PASSWORD: factory_admin
+      USER_SERVICE_DATABASE_NAME: factory_auth
+      USER_SERVICE_BOOTSTRAP_SUPERADMIN_EMAIL: superadmin@example.com
+      USER_SERVICE_BOOTSTRAP_SUPERADMIN_PASSWORD: SuperSecure123!
+      USER_SERVICE_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+      USER_SERVICE_BOOTSTRAP_ADMIN_PASSWORD: AdminSecure123!
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend-services/user-service/app:/app/app
+    depends_on:
+      - postgres
+
+  admin-frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./admin-frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8001
+    depends_on:
+      - user-service
+
+  web-frontend:
+    build:
+      context: ./web-frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./web-frontend:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_ORIGIN: http://localhost:8001
+    depends_on:
+      - user-service
+
+volumes:
+  postgres_data:
