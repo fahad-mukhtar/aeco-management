@@ -7,6 +7,7 @@ const navItems = [
   { path: "/", label: "Dashboard" },
   { path: "/employees", label: "Employees" },
   { path: "/attendance", label: "Attendance" },
+  { path: "/payroll", label: "Payroll" },
   { path: "/leaves", label: "Leaves" },
   { path: "/advances", label: "Daily Advances - خرچہ" },
   { path: "/status", label: "Service Status" },

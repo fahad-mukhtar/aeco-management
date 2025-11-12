@@ -65,11 +65,21 @@ export type EmployeeMonthSummary = {
   present_days: number;
   full_days: number;
   half_days: number;
+  paid_leave_days: number;
+  unpaid_leave_days: number;
+  penalty_fridays: number;
+  penalty_friday_dates: string[];
+  overtime_full_days: number;
   total_worked_minutes: number;
   total_worked_hours: number;
   total_advances: string;
+  initial_advance: string | null;
+  total_month_advances: string;
+  per_day_salary_for_month: string;
   monthly_salary: string;
   net_payable: string;
+  penalty_deduction_amount: string;
+  overtime_credit_amount: string;
 };
 
 export type LeaveRecord = {
@@ -80,10 +90,19 @@ export type LeaveRecord = {
   leave_type: "paid" | "unpaid";
   reason: string | null;
   created_at: string;
+  is_penalty?: boolean;
 };
 
 export type PaginatedLeaveRecords = {
   items: LeaveRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+export type PaginatedPayroll = {
+  items: EmployeeMonthSummary[];
   total: number;
   page: number;
   page_size: number;

@@ -9,13 +9,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY backend-services /tmp/backend-services
+# Copy dependency manifests first so pip layers stay cached unless requirements change
+COPY requirements /tmp/backend/requirements
+COPY user-service/requirements.txt /tmp/backend/user-service/requirements.txt
 
 RUN pip install --upgrade pip \
-    && pip install -r /tmp/backend-services/user-service/requirements.txt
+    && pip install -r /tmp/backend/user-service/requirements.txt
 
-COPY backend-services/user-service/app /app/app
-COPY backend-services/user-service/alembic.ini /app/alembic.ini
-COPY backend-services/user-service/alembic /app/alembic
+# Copy the FastAPI source code and Alembic assets last
+COPY user-service/app /app/app
+COPY user-service/alembic.ini /app/alembic.ini
+COPY user-service/alembic /app/alembic
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

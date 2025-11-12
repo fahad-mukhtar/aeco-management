@@ -9,6 +9,7 @@ import EmployeeDetail from "./pages/EmployeeDetail";
 import AttendancePage from "./pages/Attendance";
 import DailyAdvancesPage from "./pages/DailyAdvances";
 import LeavesPage from "./pages/Leaves";
+import PayrollPage from "./pages/Payroll";
 import Login from "./pages/Login";
 import ServicesStatus from "./pages/ServicesStatus";
 
@@ -34,6 +35,7 @@ const App = () => (
       <Route path="/employees/new" element={<EmployeeForm />} />
       <Route path="/employees/:employeeId/edit" element={<EmployeeForm />} />
       <Route path="/attendance" element={<AttendancePage />} />
+      <Route path="/payroll" element={<PayrollPage />} />
       <Route path="/advances" element={<DailyAdvancesPage />} />
       <Route path="/leaves" element={<LeavesPage />} />
       <Route path="/status" element={<ServicesStatus />} />

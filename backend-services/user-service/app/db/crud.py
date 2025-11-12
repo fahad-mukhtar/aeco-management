@@ -286,7 +286,6 @@ def create_daily_advance(
         recorded_for=recorded_for,
     )
     db.add(advance)
-    employee.advance_payment_received = (employee.advance_payment_received or Decimal("0")) + Decimal(amount)
     db.commit()
     db.refresh(advance)
     return advance
@@ -373,6 +372,96 @@ def create_leave_record(
     return record
 
 
+def list_penalty_overrides(
+    db: Session,
+    *,
+    employee_id: int,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> Iterable[models.PenaltyOverride]:
+    query = db.query(models.PenaltyOverride).filter(models.PenaltyOverride.employee_id == employee_id)
+    if start_date is not None:
+        query = query.filter(models.PenaltyOverride.penalty_date >= start_date)
+    if end_date is not None:
+        query = query.filter(models.PenaltyOverride.penalty_date <= end_date)
+    return query.order_by(models.PenaltyOverride.penalty_date.asc()).all()
+
+
+def create_penalty_override(
+    db: Session,
+    *,
+    employee_id: int,
+    penalty_date: date,
+) -> models.PenaltyOverride:
+    existing = (
+        db.query(models.PenaltyOverride)
+        .filter(
+            models.PenaltyOverride.employee_id == employee_id,
+            models.PenaltyOverride.penalty_date == penalty_date,
+        )
+        .first()
+    )
+    if existing:
+        return existing
+    override = models.PenaltyOverride(employee_id=employee_id, penalty_date=penalty_date)
+    db.add(override)
+    db.commit()
+    db.refresh(override)
+    return override
+
+
+def delete_penalty_override(
+    db: Session,
+    *,
+    employee_id: int,
+    penalty_date: date,
+) -> bool:
+    override = (
+        db.query(models.PenaltyOverride)
+        .filter(
+            models.PenaltyOverride.employee_id == employee_id,
+            models.PenaltyOverride.penalty_date == penalty_date,
+        )
+        .first()
+    )
+    if not override:
+        return False
+    db.delete(override)
+    db.commit()
+    return True
+
+
+def get_leave_record(db: Session, leave_id: int) -> Optional[models.LeaveRecord]:
+    return db.get(models.LeaveRecord, leave_id)
+
+
+def update_leave_record(
+    db: Session,
+    record: models.LeaveRecord,
+    *,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    leave_type: Optional[models.LeaveType] = None,
+    reason: Optional[str] = None,
+) -> models.LeaveRecord:
+    if start_date is not None:
+        record.start_date = start_date
+    if end_date is not None:
+        record.end_date = end_date
+    if leave_type is not None:
+        record.leave_type = leave_type
+    if reason is not None:
+        record.reason = reason
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def delete_leave_record(db: Session, record: models.LeaveRecord) -> None:
+    db.delete(record)
+    db.commit()
+
+
 def list_leave_records(
     db: Session,
     *,
@@ -386,9 +475,9 @@ def list_leave_records(
     if employee_id is not None:
         query = query.filter(models.LeaveRecord.employee_id == employee_id)
     if start_date is not None:
-        query = query.filter(models.LeaveRecord.start_date >= start_date)
+        query = query.filter(models.LeaveRecord.end_date >= start_date)
     if end_date is not None:
-        query = query.filter(models.LeaveRecord.end_date <= end_date)
+        query = query.filter(models.LeaveRecord.start_date <= end_date)
     query = query.order_by(models.LeaveRecord.start_date.desc())
     if limit is not None:
         query = query.offset(skip).limit(limit)
@@ -406,7 +495,7 @@ def count_leave_records(
     if employee_id is not None:
         query = query.filter(models.LeaveRecord.employee_id == employee_id)
     if start_date is not None:
-        query = query.filter(models.LeaveRecord.start_date >= start_date)
+        query = query.filter(models.LeaveRecord.end_date >= start_date)
     if end_date is not None:
-        query = query.filter(models.LeaveRecord.end_date <= end_date)
+        query = query.filter(models.LeaveRecord.start_date <= end_date)
     return query.count()

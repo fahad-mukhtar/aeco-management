@@ -9,6 +9,7 @@ from .attendance import (
     PaginatedDailyAdvanceResponse,
     PaginatedLeaveResponse,
     LeaveCreate,
+    LeaveUpdate,
     LeaveResponse,
 )
 from .auth import LoginRequest, LoginResponse, TokenPayload
@@ -18,6 +19,7 @@ from .employee import (
     EmployeeResponse,
     EmployeeUpdate,
     PaginatedEmployees,
+    PaginatedEmployeeMonthlySummaries,
 )
 from .inventory import InventoryItem
 from .production import ProductionOrder
@@ -40,6 +42,7 @@ __all__ = (
     "PaginatedDailyAdvanceResponse",
     "PaginatedLeaveResponse",
     "LeaveCreate",
+    "LeaveUpdate",
     "LeaveResponse",
     "LoginRequest",
     "LoginResponse",
@@ -49,6 +52,7 @@ __all__ = (
     "EmployeeResponse",
     "EmployeeUpdate",
     "PaginatedEmployees",
+    "PaginatedEmployeeMonthlySummaries",
     "InventoryItem",
     "ProductionOrder",
     "UserCreate",

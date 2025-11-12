@@ -132,8 +132,22 @@ const AttendancePage = () => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [clockInPicker, setClockInPicker] = useState<PickerState>(() => createPickerState(new Date()));
-  const [clockOutPicker, setClockOutPicker] = useState<PickerState>(() => createPickerState(new Date()));
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const defaultClockInPicker = (): PickerState => ({
+    date: todayIso(),
+    hour: "08",
+    minute: "00",
+    period: "AM",
+  });
+  const defaultClockOutPicker = (): PickerState => ({
+    date: todayIso(),
+    hour: "05",
+    minute: "00",
+    period: "PM",
+  });
+
+  const [clockInPicker, setClockInPicker] = useState<PickerState>(() => defaultClockInPicker());
+  const [clockOutPicker, setClockOutPicker] = useState<PickerState>(() => defaultClockOutPicker());
   const [customClockInEnabled, setCustomClockInEnabled] = useState(false);
   const [customClockOutEnabled, setCustomClockOutEnabled] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
@@ -353,7 +367,18 @@ const AttendancePage = () => {
                   <input
                     type="checkbox"
                     checked={customClockInEnabled}
-                    onChange={(event) => setCustomClockInEnabled(event.target.checked)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setCustomClockInEnabled(checked);
+                      if (checked) {
+                        setClockInPicker((prev) => ({
+                          date: prev.date || todayIso(),
+                          hour: "08",
+                          minute: "00",
+                          period: "AM",
+                        }));
+                      }
+                    }}
                   />
                   <span>Custom clock-in time</span>
                 </label>
@@ -376,7 +401,18 @@ const AttendancePage = () => {
                   <input
                     type="checkbox"
                     checked={customClockOutEnabled}
-                    onChange={(event) => setCustomClockOutEnabled(event.target.checked)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setCustomClockOutEnabled(checked);
+                      if (checked) {
+                        setClockOutPicker((prev) => ({
+                          date: prev.date || todayIso(),
+                          hour: "05",
+                          minute: "00",
+                          period: "PM",
+                        }));
+                      }
+                    }}
                   />
                   <span>Custom clock-out time</span>
                 </label>

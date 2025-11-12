@@ -76,6 +76,13 @@ class LeaveCreate(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=512)
 
 
+class LeaveUpdate(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    leave_type: Optional[str] = Field(default=None, pattern="^(paid|unpaid)$")
+    reason: Optional[str] = Field(default=None, max_length=512)
+
+
 class LeaveResponse(BaseModel):
     id: int
     employee_id: int
@@ -84,6 +91,7 @@ class LeaveResponse(BaseModel):
     leave_type: str
     reason: Optional[str] = None
     created_at: datetime
+    is_penalty: bool = False
 
     class Config:
         from_attributes = True

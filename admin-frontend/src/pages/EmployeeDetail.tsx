@@ -147,6 +147,14 @@ const EmployeeDetail = () => {
           <h3>{summary ? formatCurrency(summary.monthly_salary) : "—"}</h3>
         </article>
         <article className="stat-card">
+          <p>Initial advance</p>
+          <h3>{summary ? formatCurrency(summary.initial_advance ?? 0) : "—"}</h3>
+        </article>
+        <article className="stat-card">
+          <p>Advances this month</p>
+          <h3>{summary ? formatCurrency(summary.total_month_advances) : "—"}</h3>
+        </article>
+        <article className="stat-card">
           <p>Total advances</p>
           <h3>{summary ? formatCurrency(summary.total_advances) : "—"}</h3>
         </article>
@@ -163,8 +171,36 @@ const EmployeeDetail = () => {
           <h3>{summary?.half_days ?? "—"}</h3>
         </article>
         <article className="stat-card">
+          <p>Paid leaves</p>
+          <h3>{summary?.paid_leave_days ?? "—"}</h3>
+        </article>
+        <article className="stat-card">
+          <p>Unpaid leaves</p>
+          <h3>{summary?.unpaid_leave_days ?? "—"}</h3>
+        </article>
+        <article className="stat-card">
           <p>Hours worked</p>
           <h3>{summary ? summary.total_worked_hours.toFixed(2) : "—"}</h3>
+        </article>
+        <article className="stat-card">
+          <p>Penalty Fridays</p>
+          <h3>{summary?.penalty_fridays ?? 0}</h3>
+        </article>
+        <article className="stat-card">
+          <p>Overtime credit days</p>
+          <h3>{summary?.overtime_full_days ?? 0}</h3>
+        </article>
+        <article className="stat-card">
+          <p>Penalty deduction</p>
+          <h3>{summary ? formatCurrency(summary.penalty_deduction_amount) : "—"}</h3>
+        </article>
+        <article className="stat-card">
+          <p>Overtime credit</p>
+          <h3>{summary ? formatCurrency(summary.overtime_credit_amount) : "—"}</h3>
+        </article>
+        <article className="stat-card">
+          <p>Per-day salary ({month})</p>
+          <h3>{summary ? formatCurrency(summary.per_day_salary_for_month) : "—"}</h3>
         </article>
         <article className="stat-card highlight">
           <p>Net payable</p>
@@ -240,10 +276,10 @@ const EmployeeDetail = () => {
       <h3 style={{ marginTop: "2rem" }}>Daily advances</h3>
       <div className="info-strip">
         <div>
-          <p>Total advances for {month}</p>
+          <p>Total advances (initial + month)</p>
           <h4>{summary ? formatCurrency(summary.total_advances) : "—"}</h4>
         </div>
-        <small>Amounts include all daily allowances recorded within the selected month.</small>
+        <small>Includes opening advance plus all allowances recorded during {month}.</small>
       </div>
       <div className="table-wrapper">
         <table>

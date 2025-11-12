@@ -15,20 +15,11 @@ services:
 
   user-service:
     build:
-      context: .
-      dockerfile: ./backend-services/user-service/Dockerfile.dev
+      context: ./backend-services
+      dockerfile: user-service/Dockerfile.dev
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
-    environment:
-      USER_SERVICE_DEBUG: "True"
-      USER_SERVICE_DATABASE_HOST: postgres
-      USER_SERVICE_DATABASE_PORT: 5432
-      USER_SERVICE_DATABASE_USER: factory_admin
-      USER_SERVICE_DATABASE_PASSWORD: factory_admin
-      USER_SERVICE_DATABASE_NAME: factory_auth
-      USER_SERVICE_BOOTSTRAP_SUPERADMIN_EMAIL: superadmin@example.com
-      USER_SERVICE_BOOTSTRAP_SUPERADMIN_PASSWORD: SuperSecure123!
-      USER_SERVICE_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
-      USER_SERVICE_BOOTSTRAP_ADMIN_PASSWORD: AdminSecure123!
+    env_file:
+      - ./backend-services/user-service/.env
     ports:
       - "8001:8001"
     volumes:
@@ -50,19 +41,7 @@ services:
     depends_on:
       - user-service
 
-  web-frontend:
-    build:
-      context: ./web-frontend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./web-frontend:/app
-      - /app/node_modules
-    environment:
-      NEXT_PUBLIC_API_ORIGIN: http://localhost:8001
-    depends_on:
-      - user-service
+  
 
 volumes:
   postgres_data:

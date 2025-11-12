@@ -59,8 +59,26 @@ class EmployeeMonthlySummary(BaseModel):
     present_days: int
     full_days: int
     half_days: int
+    penalty_fridays: int
+    penalty_friday_dates: list[date]
+    overtime_full_days: int
+    paid_leave_days: int
+    unpaid_leave_days: int
     total_worked_minutes: int
     total_worked_hours: float
     total_advances: Decimal
+    initial_advance: Decimal | None
+    total_month_advances: Decimal
     monthly_salary: Decimal
+    per_day_salary_for_month: Decimal
     net_payable: Decimal
+    penalty_deduction_amount: Decimal
+    overtime_credit_amount: Decimal
+
+
+class PaginatedEmployeeMonthlySummaries(BaseModel):
+    items: list[EmployeeMonthlySummary]
+    total: int
+    page: int
+    page_size: int
+    pages: int

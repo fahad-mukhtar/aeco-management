@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Deployment target (e.g. staging, production)"
+        required: true
+        default: "staging"
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy stack
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    environment:
+      name: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build admin frontend bundle
+        working-directory: admin-frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Build web frontend bundle
+        working-directory: web-frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build service images
+        run: docker compose -f docker-compose.dev.yml build
+
+      - name: Package deployment artifacts
+        run: |
+          tar -czf admin-frontend-dist.tar.gz -C admin-frontend dist
+          tar -czf web-frontend-dist.tar.gz -C web-frontend .next
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aeco-build-artifacts
+          path: |
+            admin-frontend-dist.tar.gz
+            web-frontend-dist.tar.gz
+          if-no-files-found: ignore
+
+      - name: Deploy placeholder
+        run: |
+          echo "🚀 Deployment placeholder"
+          echo "Use SSH/CLI/Cloud provider commands here. Target: ${{ github.event.inputs.target_environment || 'main' }}"

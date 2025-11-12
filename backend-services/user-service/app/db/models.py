@@ -110,3 +110,13 @@ class LeaveRecord(Base):
     leave_type = Column(SAEnum(LeaveType, name="leave_type"), nullable=False)
     reason = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PenaltyOverride(Base):
+    __tablename__ = "penalty_overrides"
+    __table_args__ = (UniqueConstraint("employee_id", "penalty_date", name="uq_penalty_override"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), index=True, nullable=False)
+    penalty_date = Column(Date, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -2,25 +2,13 @@ from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 from math import ceil
-
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_current_super_admin
-from app.db import (
-    attendance_day_type_counts,
-    count_attendance_records,
-    count_employees,
-    create_employee,
-    get_db,
-    get_employee,
-    list_employees,
-    sum_attendance_minutes,
-    sum_daily_advances,
-    update_employee,
-)
+from app.db import count_employees, create_employee, get_db, get_employee, list_employees, update_employee
 from app.schemas import (
     EmployeeCreate,
     EmployeeMonthlySummary,
@@ -28,6 +16,7 @@ from app.schemas import (
     EmployeeUpdate,
     PaginatedEmployees,
 )
+from app.services import build_employee_month_summary
 
 router = APIRouter()
 
@@ -133,42 +122,15 @@ def employee_month_summary(
     if not employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
     start_date, end_date = _get_month_range(month)
-    day_counts = attendance_day_type_counts(
+    summary_payload = build_employee_month_summary(
         db,
-        employee_id=employee_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
-    full_days = day_counts.get("full", 0)
-    half_days = day_counts.get("half", 0)
-    present_days = full_days + half_days
-    total_minutes = sum_attendance_minutes(
-        db,
-        employee_id=employee_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
-    total_advances = sum_daily_advances(
-        db,
-        employee_id=employee_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
-    net_payable = (employee.monthly_salary or Decimal("0")) - total_advances
-    return EmployeeMonthlySummary(
         employee=employee,
-        month=(month or start_date.strftime("%Y-%m")),
         start_date=start_date,
         end_date=end_date,
-        present_days=present_days,
-        full_days=full_days,
-        half_days=half_days,
-        total_worked_minutes=total_minutes,
-        total_worked_hours=round(total_minutes / 60, 2),
-        total_advances=total_advances,
-        monthly_salary=employee.monthly_salary,
-        net_payable=net_payable,
     )
+    if month:
+        summary_payload["month"] = month
+    return EmployeeMonthlySummary(**summary_payload)
 
 
 @router.put(
