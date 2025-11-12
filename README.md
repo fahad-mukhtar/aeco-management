@@ -129,6 +129,12 @@ pytest
 
 Both frontends talk to the FastAPI service at `http://localhost:8001`.
 
+## CI/CD
+
+- **build.yml** – runs on semantic tags (`v*.*.*`). It builds the user-service, web, and admin images using the production Dockerfiles and publishes them to GHCR under `ghcr.io/<owner>/<repo>/{service}` with both the tag name and commit SHA.
+- **deploy.yml** – runs on every push to `main` (and can be dispatched manually). It builds the frontends for verification, rebuilds/pushes all service images, and then connects over SSH (via `appleboy/ssh-action`) to run `docker compose -f docker-compose.ci.yml up -d`. Make sure these secrets exist: `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `APP_DIR`. Set repository variables for `VITE_API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` so the frontend build args resolve.
+- **docker-compose.ci.yml** – production stack that expects environment values such as `ACME_EMAIL`, `API_HOST`, `WEB_HOST`, `ADMIN_HOST`, `ROOT_HOST`, `POSTGRES_*`, and `CORS_ORIGINS`. Create a `.env` alongside it on the server (or export before running compose) plus reuse `backend-services/user-service/.env` for database/application settings.
+
 ## Next steps
 
 1. Production hardening: add a dedicated `docker-compose.prod.yml`, managed secrets, and observability for the payroll + attendance services.

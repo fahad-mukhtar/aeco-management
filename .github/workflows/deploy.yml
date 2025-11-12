@@ -1,65 +1,96 @@
-name: Deploy
+name: CI/CD
 
 on:
-  workflow_dispatch:
-    inputs:
-      target_environment:
-        description: "Deployment target (e.g. staging, production)"
-        required: true
-        default: "staging"
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy stack
+  build-and-deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    environment:
-      name: production
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_PREFIX: ghcr.io/${{ github.repository }}
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Build admin frontend bundle
-        working-directory: admin-frontend
-        run: |
-          npm install
-          npm run build
-
-      - name: Build web frontend bundle
+      - name: Build web frontend
         working-directory: web-frontend
         run: |
-          npm install
+          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
           npm run build
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build service images
-        run: docker compose -f docker-compose.dev.yml build
-
-      - name: Package deployment artifacts
+      - name: Build admin frontend
+        working-directory: admin-frontend
         run: |
-          tar -czf admin-frontend-dist.tar.gz -C admin-frontend dist
-          tar -czf web-frontend-dist.tar.gz -C web-frontend .next
+          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+          npm run build
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          name: aeco-build-artifacts
-          path: |
-            admin-frontend-dist.tar.gz
-            web-frontend-dist.tar.gz
-          if-no-files-found: ignore
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy placeholder
-        run: |
-          echo "🚀 Deployment placeholder"
-          echo "Use SSH/CLI/Cloud provider commands here. Target: ${{ github.event.inputs.target_environment || 'main' }}"
+      - name: Build & push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend-services
+          file: ./backend-services/user-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-user-service:latest
+            ${{ env.IMAGE_PREFIX }}-user-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web-frontend
+          file: ./web-frontend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-web:latest
+            ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push admin image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./admin-frontend
+          file: ./admin-frontend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-admin:latest
+            ${{ env.IMAGE_PREFIX }}-admin:${{ github.sha }}
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.APP_DIR }}
+            export IMAGE_TAG=latest
+            export REGISTRY_NAMESPACE=${{ github.repository }}
+            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+            docker compose -f docker-compose.ci.yml pull || true
+            docker compose -f docker-compose.ci.yml up -d --remove-orphans
+            docker compose -f docker-compose.ci.yml exec -T user-service alembic upgrade head || true

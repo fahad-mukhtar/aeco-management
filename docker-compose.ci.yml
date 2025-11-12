@@ -1,0 +1,119 @@
+version: "3.8"
+
+networks:
+  web:
+    external: false
+
+volumes:
+  letsencrypt:
+  postgres_data:
+  uploads:
+    name: aeco_uploads
+
+services:
+  reverse-proxy:
+    image: traefik:v2.10
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - web
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - web
+
+  user-service:
+    image: ghcr.io/${REGISTRY_NAMESPACE}/user-service:${IMAGE_TAG}
+    env_file:
+      - ./backend-services/user-service/.env
+    environment:
+      - STATIC_ROOT=/app/static
+      - UPLOAD_DIR=/app/static/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - web
+    volumes:
+      - uploads:/app/static/uploads
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`${API_HOST}`)
+      - traefik.http.routers.api.entrypoints=websecure
+      - traefik.http.routers.api.tls.certresolver=le
+      - traefik.http.services.api.loadbalancer.server.port=8001
+      - traefik.http.middlewares.api-headers.headers.sslredirect=true
+      - traefik.http.middlewares.api-headers.headers.forcestsheader=true
+      - traefik.http.middlewares.api-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.middlewares.api-headers.headers.customrequestheaders.X-Forwarded-Port=443
+      - traefik.http.middlewares.api-headers.headers.customrequestheaders.X-Forwarded-For=$${client_ip}
+      - traefik.http.middlewares.api-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS,PATCH
+      - traefik.http.middlewares.api-cors.headers.accesscontrolalloworiginlist=${CORS_ORIGINS}
+      - traefik.http.middlewares.api-cors.headers.accesscontrolallowheaders=*
+      - traefik.http.middlewares.api-cors.headers.accesscontrolallowcredentials=true
+      - traefik.http.middlewares.api-cors.headers.accesscontrolmaxage=600
+      - traefik.http.routers.api.middlewares=api-headers,api-cors
+
+  web-frontend:
+    image: ghcr.io/${REGISTRY_NAMESPACE}/web-frontend:${IMAGE_TAG}
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.web.rule=Host(`${WEB_HOST}`) || Host(`${ROOT_HOST}`)
+      - traefik.http.routers.web.entrypoints=websecure
+      - traefik.http.routers.web.tls.certresolver=le
+      - traefik.http.services.web.loadbalancer.server.port=3000
+      - traefik.http.middlewares.security-headers.headers.forcestsheader=true
+      - traefik.http.middlewares.security-headers.headers.sslredirect=true
+      - traefik.http.middlewares.security-headers.headers.stsincludesubdomains=true
+      - traefik.http.middlewares.security-headers.headers.stspreload=true
+      - traefik.http.middlewares.security-headers.headers.stsseconds=31536000
+      - traefik.http.routers.web.middlewares=security-headers
+
+  admin-frontend:
+    image: ghcr.io/${REGISTRY_NAMESPACE}/admin-frontend:${IMAGE_TAG}
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.admin.rule=Host(`${ADMIN_HOST}`)
+      - traefik.http.routers.admin.entrypoints=websecure
+      - traefik.http.routers.admin.tls.certresolver=le
+      - traefik.http.services.admin.loadbalancer.server.port=80
+      - traefik.http.middlewares.security-headers.headers.forcestsheader=true
+      - traefik.http.middlewares.security-headers.headers.sslredirect=true
+      - traefik.http.middlewares.security-headers.headers.stsincludesubdomains=true
+      - traefik.http.middlewares.security-headers.headers.stspreload=true
+      - traefik.http.middlewares.security-headers.headers.stsseconds=31536000
+      - traefik.http.routers.admin.middlewares=security-headers
