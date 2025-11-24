@@ -14,8 +14,10 @@ const EmployeesList = () => {
   const [data, setData] = useState<PaginatedEmployees | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [reloadFlag, setReloadFlag] = useState(0);
   const isSuperAdmin = user?.role === "super_admin";
-  const columnCount = 8;
+  const columnCount = 9;
 
   useEffect(() => {
     if (!token) {
@@ -48,7 +50,7 @@ const EmployeesList = () => {
     };
 
     fetchEmployees();
-  }, [page, token, logout, navigate]);
+  }, [page, token, logout, navigate, reloadFlag]);
 
   const handlePrev = () => {
     setPage((prev) => Math.max(prev - 1, 1));
@@ -57,6 +59,24 @@ const EmployeesList = () => {
   const handleNext = () => {
     if (!data) return;
     setPage((prev) => Math.min(prev + 1, data.pages));
+  };
+
+  const handleDelete = async (employeeId: number, employeeName: string) => {
+    if (!token || !isSuperAdmin) return;
+    const confirmed = window.confirm(
+      `Delete ${employeeName} and all related data (attendance, advances, payroll, salary history)? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      await apiFetch(`/employees/${employeeId}`, {
+        method: "DELETE",
+        token,
+      });
+      setStatusMessage(`Deleted employee ${employeeName}.`);
+      setReloadFlag((prev) => prev + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete employee");
+    }
   };
 
   return (
@@ -74,6 +94,7 @@ const EmployeesList = () => {
       </header>
 
       {error && <p className="alert alert--error">{error}</p>}
+      {statusMessage && <p className="alert alert--info">{statusMessage}</p>}
 
       <div className="table-wrapper">
         <table>
@@ -82,6 +103,7 @@ const EmployeesList = () => {
               <th>Employee ID</th>
               <th>Name</th>
               <th>Designation</th>
+              <th>Phone</th>
               <th>Monthly Salary</th>
               <th>Per Day</th>
               <th>Regular</th>
@@ -102,6 +124,7 @@ const EmployeesList = () => {
                   <td>{employee.employee_code}</td>
                   <td>{employee.name}</td>
                   <td>{employee.designation}</td>
+                  <td>{employee.phone_number ?? "—"}</td>
                   <td>Rs {Number(employee.monthly_salary).toLocaleString()}</td>
                   <td>
                     {employee.per_day_salary
@@ -115,9 +138,18 @@ const EmployeesList = () => {
                       View
                     </Link>
                     {isSuperAdmin && (
-                      <Link to={`/employees/${employee.id}/edit`} className="link muted">
-                        Edit
-                      </Link>
+                      <>
+                        <Link to={`/employees/${employee.id}/edit`} className="link muted">
+                          Edit
+                        </Link>
+                        <button
+                          type="button"
+                          className="link danger"
+                          onClick={() => handleDelete(employee.id, employee.name)}
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>

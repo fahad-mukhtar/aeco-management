@@ -499,3 +499,73 @@ def count_leave_records(
     if end_date is not None:
         query = query.filter(models.LeaveRecord.start_date <= end_date)
     return query.count()
+
+
+# Salary payment helpers ------------------------------------------------------
+def get_salary_payment_for_month(
+    db: Session,
+    *,
+    employee_id: int,
+    month: str,
+) -> Optional[models.SalaryPayment]:
+    return (
+        db.query(models.SalaryPayment)
+        .filter(
+            models.SalaryPayment.employee_id == employee_id,
+            models.SalaryPayment.month == month,
+        )
+        .first()
+    )
+
+
+def create_salary_payment(db: Session, **data) -> models.SalaryPayment:
+    record = models.SalaryPayment(**data)
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def list_salary_payments(
+    db: Session,
+    *,
+    employee_id: Optional[int] = None,
+    month: Optional[str] = None,
+    skip: int = 0,
+    limit: Optional[int] = None,
+) -> Iterable[models.SalaryPayment]:
+    query = db.query(models.SalaryPayment).order_by(models.SalaryPayment.paid_on.desc())
+    if employee_id is not None:
+        query = query.filter(models.SalaryPayment.employee_id == employee_id)
+    if month is not None:
+        query = query.filter(models.SalaryPayment.month == month)
+    if limit is not None:
+        query = query.offset(skip).limit(limit)
+    return query.all()
+
+
+def count_salary_payments(
+    db: Session,
+    *,
+    employee_id: Optional[int] = None,
+    month: Optional[str] = None,
+) -> int:
+    query = db.query(models.SalaryPayment)
+    if employee_id is not None:
+        query = query.filter(models.SalaryPayment.employee_id == employee_id)
+    if month is not None:
+        query = query.filter(models.SalaryPayment.month == month)
+    return query.count()
+
+
+def get_latest_salary_payment(
+    db: Session,
+    *,
+    employee_id: int,
+) -> Optional[models.SalaryPayment]:
+    return (
+        db.query(models.SalaryPayment)
+        .filter(models.SalaryPayment.employee_id == employee_id)
+        .order_by(models.SalaryPayment.paid_on.desc())
+        .first()
+    )

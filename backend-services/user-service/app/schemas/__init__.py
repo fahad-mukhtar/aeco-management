@@ -21,6 +21,7 @@ from .employee import (
     PaginatedEmployees,
     PaginatedEmployeeMonthlySummaries,
 )
+from .payroll import SalaryPaymentCreate, SalaryPaymentResponse, PaginatedSalaryPayments
 from .inventory import InventoryItem
 from .production import ProductionOrder
 from .user import (
@@ -53,6 +54,9 @@ __all__ = (
     "EmployeeUpdate",
     "PaginatedEmployees",
     "PaginatedEmployeeMonthlySummaries",
+    "SalaryPaymentCreate",
+    "SalaryPaymentResponse",
+    "PaginatedSalaryPayments",
     "InventoryItem",
     "ProductionOrder",
     "UserCreate",

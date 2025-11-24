@@ -77,6 +77,10 @@ Authenticated users can query `GET /employees?page=1&page_size=10` for a paginat
   - `PUT /leaves/{id}` and `DELETE /leaves/{id}` – correct or remove mistakes without touching the database manually.
   - `GET /leaves` and `/leaves/by-employee/{id}` – filter/paginate leave history, including monthly views.
   - Penalty deductions show up alongside recorded leave. Super admins can delete a penalty entry, which files an override so the deduction is forgiven the next time payroll runs.
+- Payroll & salary payments:
+  - `GET /payroll` – paginated overview that includes salary status, overtime, penalties, and net payable totals.
+  - `POST /payroll/payments/{employee_id}` – captures a month's payout, logs carry-forward advances, and updates `advance_pending` if advances exceeded the salary or an extra amount is disbursed on payday. Paying less than the net payable automatically reduces the employee's outstanding initial advance, so you can reconcile older advances gradually.
+  - `GET /payroll/payments` – audit salary payments (filter by employee/month). The admin UI's Payroll screen now allows super admins to initiate payouts with optional additional advances, and the employee detail screen shows the latest salary status plus recent payment history.
 - Payroll:
   - `GET /payroll` – monthly roll-up that surfaces penalty Fridays, overtime credits, and advance deductions for every employee. This powers the Payroll screen in the admin panel and feeds CSV exports.
 

@@ -127,6 +127,7 @@ const AttendancePage = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [attendancePage, setAttendancePage] = useState(1);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -150,6 +151,7 @@ const AttendancePage = () => {
   const [clockOutPicker, setClockOutPicker] = useState<PickerState>(() => defaultClockOutPicker());
   const [customClockInEnabled, setCustomClockInEnabled] = useState(false);
   const [customClockOutEnabled, setCustomClockOutEnabled] = useState(false);
+  const [clockAction, setClockAction] = useState<"clock-in" | "clock-out">("clock-in");
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
   const [editClockInPicker, setEditClockInPicker] = useState<PickerState>(() => createEmptyPickerState());
   const [editClockOutPicker, setEditClockOutPicker] = useState<PickerState>(() => createEmptyPickerState());
@@ -281,6 +283,14 @@ const AttendancePage = () => {
   const selectedEmployeeName = useMemo(() => {
     return employees.find((emp) => emp.id === selectedEmployee)?.name ?? "Employee";
   }, [employees, selectedEmployee]);
+  const filteredEmployees = useMemo(() => {
+    const term = employeeSearch.trim().toLowerCase();
+    if (!term) return employees;
+    return employees.filter((employee) =>
+      `${employee.employee_code} ${employee.name}`.toLowerCase().includes(term)
+    );
+  }, [employees, employeeSearch]);
+  const isEmployeeSelected = Boolean(selectedEmployee);
   const latestRecord = attendanceData?.items?.[0];
   const summaryCards = [
     {
@@ -296,242 +306,268 @@ const AttendancePage = () => {
       value: latestRecord?.day_type ? latestRecord.day_type.toUpperCase() : "Pending",
     },
   ];
+  const isClockInAction = clockAction === "clock-in";
+  const currentCustomEnabled = isClockInAction ? customClockInEnabled : customClockOutEnabled;
+  const currentPicker = isClockInAction ? clockInPicker : clockOutPicker;
+
+  const handleCustomToggle = (checked: boolean) => {
+    if (isClockInAction) {
+      setCustomClockInEnabled(checked);
+      if (checked) {
+        setClockInPicker((prev) => ({
+          date: prev.date || todayIso(),
+          hour: "08",
+          minute: "00",
+          period: "AM",
+        }));
+      }
+    } else {
+      setCustomClockOutEnabled(checked);
+      if (checked) {
+        setClockOutPicker((prev) => ({
+          date: prev.date || todayIso(),
+          hour: "05",
+          minute: "00",
+          period: "PM",
+        }));
+      }
+    }
+  };
 
   return (
-    <section>
-      <header className="section-header">
-        <div>
-          <h2>Attendance Console</h2>
-          <p>Clock AECO staff in/out quickly, review their latest status, and correct punches when needed.</p>
-        </div>
-        <label className="month-picker">
-          <span>Month</span>
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => {
-              setMonth(event.target.value);
-              setAttendancePage(1);
-              if (selectedEmployee) {
-                refreshAttendance(selectedEmployee, 1);
-              }
-            }}
-          />
-        </label>
-      </header>
-
-      {error && <p className="alert alert--error">{error}</p>}
-      {statusMessage && <p className="alert alert--info">{statusMessage}</p>}
-
-      <div className="attendance-summary">
-        {summaryCards.map((card) => (
-          <article key={card.label}>
-            <p>{card.label}</p>
-            <h4>{card.value}</h4>
-          </article>
-        ))}
-      </div>
-
-      <div className="attendance-grid">
-        <article className="attendance-card">
-          <div className="card-header">
-            <h3>Who are we clocking?</h3>
-            <span>Pick an employee to view their timeline.</span>
-          </div>
-          <label>
-            <span>Employee</span>
-            <select
-              value={selectedEmployee ?? ""}
-              onChange={(event) => setSelectedEmployee(event.target.value ? Number(event.target.value) : null)}
-            >
-              {employees.length === 0 && <option value="">No employees found</option>}
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.employee_code} — {employee.name}
-                </option>
+    <section className="attendance-shell">
+      <div className="attendance-layout">
+        <aside className="attendance-sidebar">
+          <div className="card sidebar-card">
+            <header className="card__header">
+              <div>
+                <h3>Team roster</h3>
+                <p className="muted small">Pick someone to review or punch.</p>
+              </div>
+            </header>
+            <input
+              type="search"
+              placeholder="Search by code or name"
+              value={employeeSearch}
+              onChange={(event) => setEmployeeSearch(event.target.value)}
+            />
+            <div className="employee-list">
+              {filteredEmployees.length === 0 && <p className="muted small">No matching employees.</p>}
+              {filteredEmployees.map((employee) => (
+                <button
+                  key={employee.id}
+                  type="button"
+                  className={`employee-list__item ${selectedEmployee === employee.id ? "active" : ""}`}
+                  onClick={() => {
+                    setSelectedEmployee(employee.id);
+                    setAttendancePage(1);
+                    refreshAttendance(employee.id, 1);
+                  }}
+                >
+                  <div>
+                    <strong>{employee.name}</strong>
+                    <span>{employee.designation}</span>
+                  </div>
+                  <span className="muted">{employee.employee_code}</span>
+                </button>
               ))}
-            </select>
-          </label>
-          <p className="card-helper">Shift window: 8:00 AM – 5:00 PM (break 1:00 PM – 2:00 PM)</p>
-        </article>
+            </div>
+          </div>
+        </aside>
 
-        <article className="attendance-card">
-          <div className="card-header">
-            <h3>Quick clock controls</h3>
-            <span>Use current time or switch to custom.</span>
+        <div className="attendance-main">
+          <header className="section-header">
+            <div>
+              <h2>Attendance console</h2>
+              <p>Clock AECO staff in/out, glance at live status, and fix mistakes in seconds.</p>
+            </div>
+            <label className="month-picker">
+              <span>Month</span>
+              <input
+                type="month"
+                value={month}
+                onChange={(event) => {
+                  setMonth(event.target.value);
+                  setAttendancePage(1);
+                  if (selectedEmployee) {
+                    refreshAttendance(selectedEmployee, 1);
+                  }
+                }}
+              />
+            </label>
+          </header>
+
+          {error && <p className="alert alert--error">{error}</p>}
+          {statusMessage && <p className="alert alert--info">{statusMessage}</p>}
+
+          <div className="stats-grid" style={{ marginTop: "1rem" }}>
+            {summaryCards.map((card) => (
+              <article key={card.label} className="stat-card">
+                <p>{card.label}</p>
+                <h3>{card.value}</h3>
+              </article>
+            ))}
           </div>
-          <div className="quick-clock">
-            <div className="quick-clock__section">
+
+          <section className="card" style={{ marginTop: "1.5rem" }}>
+            <header className="card__header">
+              <div>
+                <h3>Quick actions</h3>
+                <p className="muted">All punches apply to {selectedEmployeeName}.</p>
+              </div>
+            </header>
+            <div className="action-toggle">
+              <button
+                type="button"
+                className={clockAction === "clock-in" ? "active" : ""}
+                onClick={() => setClockAction("clock-in")}
+              >
+                Clock in
+              </button>
+              <button
+                type="button"
+                className={clockAction === "clock-out" ? "active" : ""}
+                onClick={() => setClockAction("clock-out")}
+              >
+                Clock out
+              </button>
+            </div>
+            <div className="quick-clock single">
               <div className="switch-field">
                 <label>
                   <input
                     type="checkbox"
-                    checked={customClockInEnabled}
-                    onChange={(event) => {
-                      const checked = event.target.checked;
-                      setCustomClockInEnabled(checked);
-                      if (checked) {
-                        setClockInPicker((prev) => ({
-                          date: prev.date || todayIso(),
-                          hour: "08",
-                          minute: "00",
-                          period: "AM",
-                        }));
-                      }
-                    }}
+                    checked={currentCustomEnabled}
+                    onChange={(event) => handleCustomToggle(event.target.checked)}
+                    disabled={!isSuperAdmin}
                   />
-                  <span>Custom clock-in time</span>
+                  <span>Use custom date & time</span>
                 </label>
               </div>
-              {customClockInEnabled && (
-                <TimePickerControls state={clockInPicker} onChange={setClockInPicker} disabled={!isSuperAdmin} />
+              {currentCustomEnabled && (
+                <TimePickerControls
+                  state={currentPicker}
+                  onChange={isClockInAction ? setClockInPicker : setClockOutPicker}
+                  disabled={!isSuperAdmin}
+                />
               )}
               <button
                 type="button"
-                className="button button--primary wide"
-                onClick={() => handleClock("clock-in")}
+                className={`button ${isClockInAction ? "button--primary" : "button--secondary"} wide`}
+                onClick={() => handleClock(clockAction)}
                 disabled={!isSuperAdmin || !selectedEmployee}
               >
-                Clock in now
+                {isClockInAction ? "Clock in now" : "Clock out now"}
               </button>
             </div>
-            <div className="quick-clock__section">
-              <div className="switch-field">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={customClockOutEnabled}
-                    onChange={(event) => {
-                      const checked = event.target.checked;
-                      setCustomClockOutEnabled(checked);
-                      if (checked) {
-                        setClockOutPicker((prev) => ({
-                          date: prev.date || todayIso(),
-                          hour: "05",
-                          minute: "00",
-                          period: "PM",
-                        }));
-                      }
-                    }}
-                  />
-                  <span>Custom clock-out time</span>
-                </label>
+          </section>
+
+          <section style={{ marginTop: "2rem" }}>
+            <header className="section-header">
+              <div>
+                <h3>Attendance history — {selectedEmployeeName}</h3>
+                <p>Entries for {month}.</p>
               </div>
-              {customClockOutEnabled && (
-                <TimePickerControls state={clockOutPicker} onChange={setClockOutPicker} disabled={!isSuperAdmin} />
-              )}
-              <button
-                type="button"
-                className="button button--secondary wide"
-                onClick={() => handleClock("clock-out")}
-                disabled={!isSuperAdmin || !selectedEmployee}
-              >
-                Clock out now
-              </button>
+            </header>
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Clock in</th>
+                    <th>Clock out</th>
+                    <th>Worked hours</th>
+                    <th>Day type</th>
+                    {isSuperAdmin && <th>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingAttendance ? (
+                    <tr>
+                      <td colSpan={isSuperAdmin ? 6 : 5} className="table-empty">
+                        Loading attendance…
+                      </td>
+                    </tr>
+                  ) : attendanceData && attendanceData.items.length > 0 ? (
+                    attendanceData.items.map((record) => (
+                      <tr key={record.id}>
+                        <td>{record.work_date}</td>
+                        <td>{formatDate12Hour(record.clock_in)}</td>
+                        <td>{record.clock_out ? formatDate12Hour(record.clock_out) : "—"}</td>
+                        <td>{(record.worked_minutes / 60).toFixed(2)}</td>
+                        <td style={{ textTransform: "capitalize" }}>{record.day_type ?? "pending"}</td>
+                        {isSuperAdmin && (
+                          <td>
+                            <div className="button-row" style={{ gap: "0.5rem" }}>
+                              <button
+                                type="button"
+                                className="button button--secondary"
+                                onClick={() => handleOpenEdit(record)}
+                                disabled={!isSuperAdmin}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--ghost"
+                                onClick={() => handleDeleteAttendance(record.id)}
+                                disabled={!isSuperAdmin}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={isSuperAdmin ? 6 : 5} className="table-empty">
+                        {selectedEmployee ? "No attendance for this month." : "Select an employee to see attendance."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </article>
-      </div>
-      <h3>Attendance history — {selectedEmployeeName}</h3>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Clock in</th>
-              <th>Clock out</th>
-              <th>Worked hours</th>
-              <th>Day type</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loadingAttendance ? (
-              <tr>
-                <td colSpan={6} className="table-empty">
-                  Loading attendance…
-                </td>
-              </tr>
-            ) : attendanceData && attendanceData.items.length ? (
-              attendanceData.items.map((record) => (
-                <tr key={record.id}>
-                  <td>{record.work_date}</td>
-                  <td>{formatTime12Hour(record.clock_in)}</td>
-                  <td>{record.clock_out ? formatTime12Hour(record.clock_out) : "—"}</td>
-                  <td>{(record.worked_minutes / 60).toFixed(2)} hrs</td>
-                  <td style={{ textTransform: "capitalize" }}>{record.day_type ?? "pending"}</td>
-                  <td className="table-actions">
-                    <button
-                      type="button"
-                      className="link"
-                      onClick={() => {
-                        setEditingRecordId(record.id);
-                        setEditClockInPicker(createPickerState(new Date(record.clock_in)));
-                        setEditClockOutPicker(
-                          record.clock_out
-                            ? createPickerState(new Date(record.clock_out))
-                            : createEmptyPickerState(record.work_date)
-                        );
-                        setIsEditModalOpen(true);
-                      }}
-                      disabled={!isSuperAdmin}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="link muted"
-                      onClick={() => handleDeleteAttendance(record.id)}
-                      disabled={!isSuperAdmin}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={6} className="table-empty">
-                  No attendance for this month.
-                </td>
-              </tr>
+            {attendanceData && attendanceData.pages > 1 && (
+              <footer className="pagination">
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => {
+                    if (attendancePage > 1 && selectedEmployee) {
+                      const newPage = Math.max(attendancePage - 1, 1);
+                      setAttendancePage(newPage);
+                      refreshAttendance(selectedEmployee, newPage);
+                    }
+                  }}
+                  disabled={attendancePage === 1}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {attendanceData?.page ?? attendancePage} of {attendanceData?.pages ?? 1}
+                </span>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => {
+                    if (attendanceData && selectedEmployee && attendancePage < attendanceData.pages) {
+                      const newPage = attendancePage + 1;
+                      setAttendancePage(newPage);
+                      refreshAttendance(selectedEmployee, newPage);
+                    }
+                  }}
+                  disabled={attendanceData ? attendancePage >= attendanceData.pages : true}
+                >
+                  Next
+                </button>
+              </footer>
             )}
-          </tbody>
-        </table>
+          </section>
+        </div>
       </div>
-      <footer className="pagination">
-        <button
-          type="button"
-          className="button button--secondary"
-          onClick={() => {
-            if (attendanceData && attendancePage > 1) {
-              const newPage = Math.max(attendancePage - 1, 1);
-              setAttendancePage(newPage);
-              selectedEmployee && refreshAttendance(selectedEmployee, newPage);
-            }
-          }}
-          disabled={attendancePage === 1}
-        >
-          Previous
-        </button>
-        <span>
-          Page {attendanceData?.page ?? attendancePage} of {attendanceData?.pages ?? 1}
-        </span>
-        <button
-          type="button"
-          className="button button--secondary"
-          onClick={() => {
-            if (attendanceData && attendancePage < attendanceData.pages) {
-              const newPage = attendancePage + 1;
-              setAttendancePage(newPage);
-              selectedEmployee && refreshAttendance(selectedEmployee, newPage);
-            }
-          }}
-          disabled={attendanceData ? attendancePage >= attendanceData.pages : true}
-        >
-          Next
-        </button>
-      </footer>
 
       {isEditModalOpen && (
         <div className="modal-backdrop">
@@ -563,7 +599,6 @@ const AttendancePage = () => {
           </div>
         </div>
       )}
-
     </section>
   );
 };

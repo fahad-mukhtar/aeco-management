@@ -34,10 +34,17 @@ const Login = () => {
 
   return (
     <div className="auth-container">
+      <div className="auth-hero">
+        <h2>AECO Factory Intelligence</h2>
+        <p>
+          Secure access to production oversight, payroll, and attendance operations. This console is reserved for
+          authorized AECO leadership.
+        </p>
+      </div>
       <div className="auth-card">
         <header className="auth-card__header">
-          <h1>AECO Admin Console</h1>
-          <p>Sign in with your AECO administrator credentials.</p>
+          <h1>Sign in</h1>
+          <p>Enter your administrator credentials to continue.</p>
         </header>
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-form__field">
@@ -52,7 +59,7 @@ const Login = () => {
             />
           </label>
           <label className="auth-form__field">
-          <span>Password</span>
+            <span>Password</span>
             <input
               type="password"
               value={password}
@@ -63,11 +70,7 @@ const Login = () => {
             />
           </label>
           {error && <p className="auth-form__error">{error}</p>}
-          <button
-            type="submit"
-            className="button button--primary"
-            disabled={isSubmitting || !email || !password}
-          >
+          <button type="submit" className="button button--primary" disabled={isSubmitting || !email || !password}>
             {isSubmitting ? "Signing in…" : "Sign in"}
           </button>
         </form>

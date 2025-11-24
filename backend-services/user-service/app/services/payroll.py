@@ -65,6 +65,7 @@ def build_employee_month_summary(
 
     overtime_minutes = sum(max(0, record.worked_minutes - 480) for record in attendance_records)
     overtime_full_days = overtime_minutes // SixHours
+    overtime_hours = round(overtime_minutes / 60, 2)
 
     leave_records = list_leave_records(
         db,
@@ -123,13 +124,30 @@ def build_employee_month_summary(
     penalty_fridays = len(penalty_friday_dates)
 
     initial_advance = employee.advance_payment_received or Decimal("0")
+    pending_balance = Decimal("0")
     per_day_salary_for_month = _calculate_per_day_salary(employee.monthly_salary, start_date)
     penalty_deduction = per_day_salary_for_month * penalty_fridays
     overtime_credit = per_day_salary_for_month * overtime_full_days
-    net_payable = (employee.monthly_salary or Decimal("0")) - total_month_advances
-    net_payable = net_payable - penalty_deduction + overtime_credit
+    payable_days = Decimal(full_days) + (Decimal(half_days) * Decimal("0.5")) + Decimal(paid_leave_days)
+    friday_bonus = Decimal("0")
+    for record in attendance_records:
+        if record.work_date.weekday() != 4:
+            continue
+        base_day = Decimal("1") if record.day_type == "full" else Decimal("0.5") if record.day_type == "half" else Decimal("0")
+        if record.worked_minutes >= 480:
+            target_day = Decimal("2")
+        elif record.worked_minutes >= 240:
+            target_day = Decimal("1")
+        else:
+            target_day = base_day
+        bonus = target_day - base_day
+        if bonus > 0:
+            friday_bonus += bonus
+    payable_days += friday_bonus
+    base_pay = per_day_salary_for_month * payable_days
+    net_payable = base_pay - penalty_deduction + overtime_credit - total_month_advances
 
-    total_advances = initial_advance + total_month_advances
+    total_advances = initial_advance + pending_balance + total_month_advances
 
     return {
         "employee": employee,
@@ -142,11 +160,16 @@ def build_employee_month_summary(
         "penalty_fridays": penalty_fridays,
         "penalty_friday_dates": penalty_friday_dates,
         "overtime_full_days": int(overtime_full_days),
+        "overtime_total_minutes": int(overtime_minutes),
+        "overtime_total_hours": overtime_hours,
+        "friday_bonus_days": friday_bonus,
         "total_worked_minutes": total_minutes,
         "total_worked_hours": round(total_minutes / 60, 2),
         "total_advances": total_advances,
         "initial_advance": initial_advance,
         "total_month_advances": total_month_advances,
+        "base_pay_for_period": base_pay,
+        "pending_advances_balance": pending_balance,
         "monthly_salary": employee.monthly_salary,
         "per_day_salary_for_month": per_day_salary_for_month,
         "net_payable": net_payable,
@@ -154,4 +177,12 @@ def build_employee_month_summary(
         "unpaid_leave_days": unpaid_leave_days,
         "penalty_deduction_amount": penalty_deduction,
         "overtime_credit_amount": overtime_credit,
+        "salary_paid": False,
+        "salary_paid_on": None,
+        "salary_paid_amount": None,
+        "salary_payment_id": None,
+        "salary_paid_additional_advance": None,
+        "salary_paid_advance_reduction": None,
+        "salary_remaining_initial_advance": None,
+        "salary_pending_advance_after": None,
     }

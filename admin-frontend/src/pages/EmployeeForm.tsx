@@ -8,6 +8,7 @@ import type { Employee } from "@/types/employee";
 type FormState = {
   name: string;
   designation: string;
+  phone_number: string;
   monthly_salary: string;
   per_day_salary: string;
   regular_employee: boolean;
@@ -20,6 +21,7 @@ type FormState = {
 const emptyState: FormState = {
   name: "",
   designation: "",
+  phone_number: "",
   monthly_salary: "",
   per_day_salary: "",
   regular_employee: true,
@@ -58,6 +60,7 @@ const EmployeeForm = () => {
         setForm({
           name: data.name,
           designation: data.designation,
+          phone_number: data.phone_number ?? "",
           monthly_salary: data.monthly_salary ?? "",
           per_day_salary: data.per_day_salary ?? "",
           regular_employee: data.regular_employee,
@@ -92,6 +95,7 @@ const EmployeeForm = () => {
     const payload = {
       name: form.name.trim(),
       designation: form.designation.trim(),
+      phone_number: form.phone_number.trim() || null,
       monthly_salary: form.monthly_salary ? Number(form.monthly_salary) : 0,
       regular_employee: form.regular_employee,
       daily_allowance: form.daily_allowance ? Number(form.daily_allowance) : null,
@@ -175,6 +179,15 @@ const EmployeeForm = () => {
             value={form.designation}
             onChange={handleChange("designation")}
             required
+            disabled={isFetching || isSubmitting}
+          />
+        </label>
+        <label>
+          <span>Phone number</span>
+          <input
+            type="tel"
+            value={form.phone_number}
+            onChange={handleChange("phone_number")}
             disabled={isFetching || isSubmitting}
           />
         </label>

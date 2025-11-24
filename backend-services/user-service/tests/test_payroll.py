@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.routes.payroll import create_salary_payment_entry
 from app.db import (
     AttendanceRecord,
     DailyAdvance,
@@ -15,7 +16,9 @@ from app.db import (
     count_leave_records,
     create_penalty_override,
     list_leave_records,
+    SalaryPayment,
 )
+from app.schemas import SalaryPaymentCreate
 from app.services import build_employee_month_summary
 
 
@@ -142,6 +145,9 @@ def test_payroll_summary_includes_penalty_and_overtime(db_session: Session):
     assert summary["penalty_fridays"] == 1
     assert summary["penalty_friday_dates"] == [date(2025, 1, 10)]
     assert summary["overtime_full_days"] == 1
+    assert summary["overtime_total_minutes"] == 360
+    assert summary["overtime_total_hours"] == 6.0
+    assert summary["friday_bonus_days"] == Decimal("1")
 
     per_day_salary = summary["per_day_salary_for_month"]
     assert summary["penalty_deduction_amount"] == per_day_salary * summary["penalty_fridays"]
@@ -191,3 +197,36 @@ def test_penalty_override_removes_penalty(db_session: Session):
     )
     assert summary_after_override["penalty_fridays"] == 0
     assert summary_after_override["penalty_friday_dates"] == []
+
+
+def test_partial_salary_payment_reduces_initial_advance(db_session: Session):
+    employee = _create_employee(db_session)
+    employee.advance_payment_received = Decimal("50000")
+    employee.monthly_salary = Decimal("25000")
+    employee.per_day_salary = Decimal("1000")
+    db_session.commit()
+
+    db_session.add(
+        AttendanceRecord(
+            employee_id=employee.id,
+            work_date=date(2025, 1, 2),
+            clock_in=datetime(2025, 1, 2, 8, 0),
+            clock_out=datetime(2025, 1, 2, 17, 0),
+            worked_minutes=480,
+            day_type="full",
+        )
+    )
+    db_session.commit()
+
+    payment = create_salary_payment_entry(
+        employee.id,
+        SalaryPaymentCreate(month="2025-01", paid_amount=Decimal("20000")),
+        db=db_session,
+        _super_admin=None,
+    )
+
+    db_session.refresh(employee)
+    assert employee.advance_payment_received == Decimal("50000")
+    assert isinstance(payment, SalaryPayment)
+    assert payment.advance_reduction_amount == Decimal("5000")
+    assert payment.initial_advance_after == Decimal("45000")

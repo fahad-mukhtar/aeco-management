@@ -50,7 +50,6 @@ const Layout = ({ children }: PropsWithChildren) => {
           <div className="topbar__identity">
             <span className="avatar">{userInitial}</span>
             <div>
-              <p className="topbar__greeting">Welcome back</p>
               <p className="topbar__role">{roleLabel}</p>
             </div>
           </div>

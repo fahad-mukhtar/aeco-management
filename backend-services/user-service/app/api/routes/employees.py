@@ -8,7 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_current_super_admin
-from app.db import count_employees, create_employee, get_db, get_employee, list_employees, update_employee
+from app.db import (
+    count_employees,
+    create_employee,
+    get_db,
+    get_employee,
+    get_salary_payment_for_month,
+    list_employees,
+    update_employee,
+)
 from app.schemas import (
     EmployeeCreate,
     EmployeeMonthlySummary,
@@ -82,6 +90,9 @@ def create_employee_record(
     data = payload.model_dump()
     data["name"] = data["name"].strip()
     data["designation"] = data["designation"].strip()
+    if data.get("phone_number"):
+        phone = data["phone_number"].strip()
+        data["phone_number"] = phone or None
     monthly_salary: Decimal = data["monthly_salary"]
     joining_date = data.get("joining_date")
     data["per_day_salary"] = _calculate_per_day_salary(monthly_salary, joining_date)
@@ -130,6 +141,28 @@ def employee_month_summary(
     )
     if month:
         summary_payload["month"] = month
+    month_token = month or start_date.strftime("%Y-%m")
+    payment = get_salary_payment_for_month(
+        db,
+        employee_id=employee_id,
+        month=month_token,
+    )
+    summary_payload["salary_paid"] = bool(payment)
+    summary_payload["salary_paid_on"] = payment.paid_on if payment else None
+    summary_payload["salary_paid_amount"] = payment.paid_amount if payment else None
+    summary_payload["salary_payment_id"] = payment.id if payment else None
+    summary_payload["salary_paid_note"] = payment.note if payment else None
+    summary_payload["salary_paid_additional_advance"] = payment.additional_advance if payment else None
+    summary_payload["salary_paid_advance_reduction"] = payment.advance_reduction_amount if payment else None
+    summary_payload["salary_remaining_initial_advance"] = payment.initial_advance_after if payment else None
+    summary_payload["salary_pending_advance_after"] = payment.pending_advance_after if payment else None
+    if payment:
+        summary_payload["pending_advances_balance"] = Decimal(payment.pending_advance_after or 0)
+        summary_payload["total_advances"] = (
+            summary_payload["initial_advance"]
+            + summary_payload["pending_advances_balance"]
+            + summary_payload["total_month_advances"]
+        )
     return EmployeeMonthlySummary(**summary_payload)
 
 
@@ -152,6 +185,11 @@ def update_employee_record(
         data["name"] = data["name"].strip()
     if "designation" in data and data["designation"] is not None:
         data["designation"] = data["designation"].strip()
+    if "phone_number" in data:
+        phone = data.get("phone_number")
+        if phone:
+            phone = phone.strip()
+        data["phone_number"] = phone or None
 
     if "monthly_salary" in data or "joining_date" in data:
         monthly_value = data.get("monthly_salary", employee.monthly_salary)
@@ -161,3 +199,20 @@ def update_employee_record(
 
     employee = update_employee(db, employee, data)
     return employee
+
+
+@router.delete(
+    "/{employee_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an employee and related data",
+)
+def delete_employee_record(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _super_admin=Depends(get_current_super_admin),
+) -> None:
+    employee = get_employee(db, employee_id)
+    if not employee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+    db.delete(employee)
+    db.commit()

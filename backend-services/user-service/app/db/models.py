@@ -48,6 +48,7 @@ class Employee(Base):
     employee_code = Column(String(64), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
     designation = Column(String(255), nullable=False)
+    phone_number = Column(String(32))
     monthly_salary = Column(Numeric(12, 2), nullable=False)
     per_day_salary = Column(Numeric(12, 2))
     regular_employee = Column(Boolean, nullable=False, default=True)
@@ -109,6 +110,50 @@ class LeaveRecord(Base):
     end_date = Column(Date, nullable=False)
     leave_type = Column(SAEnum(LeaveType, name="leave_type"), nullable=False)
     reason = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class SalaryPaymentStatus(str, Enum):
+    PAID = "paid"
+
+
+class SalaryPayment(Base):
+    __tablename__ = "salary_payments"
+    __table_args__ = (UniqueConstraint("employee_id", "month", name="uq_salary_payment_employee_month"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), index=True, nullable=False)
+    month = Column(String(8), nullable=False)
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+    present_days = Column(Integer, nullable=False, default=0)
+    full_days = Column(Integer, nullable=False, default=0)
+    half_days = Column(Integer, nullable=False, default=0)
+    paid_leave_days = Column(Integer, nullable=False, default=0)
+    unpaid_leave_days = Column(Integer, nullable=False, default=0)
+    penalty_fridays = Column(Integer, nullable=False, default=0)
+    overtime_full_days = Column(Integer, nullable=False, default=0)
+    overtime_total_minutes = Column(Integer, nullable=False, default=0)
+    overtime_total_hours = Column(Numeric(10, 2), nullable=False, default=0)
+    total_worked_minutes = Column(Integer, nullable=False, default=0)
+    total_worked_hours = Column(Numeric(10, 2), nullable=False, default=0)
+    monthly_salary = Column(Numeric(12, 2), nullable=False)
+    per_day_salary = Column(Numeric(12, 2), nullable=False)
+    total_advances = Column(Numeric(12, 2), nullable=False)
+    initial_advance = Column(Numeric(12, 2), nullable=False)
+    total_month_advances = Column(Numeric(12, 2), nullable=False)
+    penalty_deduction_amount = Column(Numeric(12, 2), nullable=False)
+    overtime_credit_amount = Column(Numeric(12, 2), nullable=False)
+    net_payable = Column(Numeric(12, 2), nullable=False)
+    paid_amount = Column(Numeric(12, 2), nullable=False)
+    additional_advance = Column(Numeric(12, 2), nullable=False, default=0)
+    advance_reduction_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    initial_advance_after = Column(Numeric(12, 2), nullable=False, default=0)
+    carry_forward_advance = Column(Numeric(12, 2), nullable=False, default=0)
+    pending_advance_after = Column(Numeric(12, 2), nullable=False, default=0)
+    status = Column(SAEnum(SalaryPaymentStatus, name="salary_payment_status"), nullable=False, default=SalaryPaymentStatus.PAID)
+    note = Column(Text)
+    paid_on = Column(DateTime, default=datetime.utcnow, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

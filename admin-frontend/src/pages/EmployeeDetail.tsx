@@ -9,16 +9,25 @@ import type {
   EmployeeMonthSummary,
   PaginatedAttendance,
   PaginatedDailyAdvance,
+  PaginatedSalaryPayments,
+  SalaryPayment,
 } from "@/types/employee";
 import { formatTime12Hour } from "@/utils/time";
 
 const formatCurrency = (value: string | number) =>
   `Rs ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
+type InfoRow = {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  note?: string[];
+};
+
 const EmployeeDetail = () => {
   const { employeeId } = useParams();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -32,12 +41,16 @@ const EmployeeDetail = () => {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [loadingAdvances, setLoadingAdvances] = useState(false);
+  const [loadingPayments, setLoadingPayments] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentsError, setPaymentsError] = useState<string | null>(null);
+  const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
+  const isSuperAdmin = user?.role === "super_admin";
 
   const employeeName = useMemo(() => summary?.employee.name ?? "Employee", [summary?.employee.name]);
 
   useEffect(() => {
-    if (!employeeId || !token) return;
+    if (!employeeId || !token || !isSuperAdmin) return;
     const controller = new AbortController();
     const fetchSummary = async () => {
       setLoadingSummary(true);
@@ -102,6 +115,36 @@ const EmployeeDetail = () => {
     fetchAdvances();
   }, [employeeId, token, month, advancePage]);
 
+  useEffect(() => {
+    if (!employeeId || !token) return;
+    let ignore = false;
+    const fetchPayments = async () => {
+      setLoadingPayments(true);
+      setPaymentsError(null);
+      try {
+        const result = await apiFetch<PaginatedSalaryPayments>(
+          `/payroll/payments?employee_id=${employeeId}&page=1&page_size=5`,
+          { token }
+        );
+        if (!ignore) {
+          setSalaryPayments(result.items);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setPaymentsError(err instanceof Error ? err.message : "Unable to load salary payments");
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingPayments(false);
+        }
+      }
+    };
+    fetchPayments();
+    return () => {
+      ignore = true;
+    };
+  }, [employeeId, token, isSuperAdmin]);
+
   if (!employeeId) {
     return (
       <section>
@@ -112,6 +155,108 @@ const EmployeeDetail = () => {
       </section>
     );
   }
+
+  const compensationRows: InfoRow[] = [
+    {
+      label: "Monthly salary",
+      value: summary ? formatCurrency(summary.monthly_salary) : "—",
+    },
+    {
+      label: "Earned this month",
+      value: summary ? formatCurrency(summary.base_pay_for_period) : "—",
+    },
+    {
+      label: `Per-day salary (${month})`,
+      value: summary ? formatCurrency(summary.per_day_salary_for_month) : "—",
+    },
+    {
+      label: "Initial advance",
+      value: summary ? formatCurrency(summary.initial_advance ?? "0") : "—",
+    },
+    {
+      label: "Advances this month",
+      value: summary ? formatCurrency(summary.total_month_advances ?? "0") : "—",
+    },
+    summary
+      ? {
+          label: "Total advances",
+          value: formatCurrency(summary.total_advances ?? "0"),
+          note: [`Outstanding adjustments: ${formatCurrency(summary.pending_advances_balance ?? "0")}`],
+        }
+      : null,
+    summary?.salary_remaining_initial_advance
+      ? {
+          label: "Remaining initial advance",
+          value: formatCurrency(summary.salary_remaining_initial_advance),
+        }
+      : null,
+  ].filter(Boolean) as InfoRow[];
+
+  const attendanceMetrics = [
+    { label: "Present days", value: summary?.present_days ?? "—" },
+    { label: "Full days", value: summary?.full_days ?? "—" },
+    { label: "Half days", value: summary?.half_days ?? "—" },
+    { label: "Paid leaves", value: summary?.paid_leave_days ?? "—" },
+    { label: "Unpaid leaves", value: summary?.unpaid_leave_days ?? "—" },
+    { label: "Penalty Fridays", value: summary?.penalty_fridays ?? "—" },
+    { label: "Friday bonus days", value: summary ? Number(summary.friday_bonus_days).toFixed(2) : "—" },
+    { label: "Hours worked", value: summary ? `${summary.total_worked_hours.toFixed(2)} hrs` : "—" },
+    { label: "Overtime credit days", value: summary?.overtime_full_days ?? "—" },
+    { label: "Overtime hours", value: summary ? `${summary.overtime_total_hours.toFixed(2)} hrs` : "—" },
+  ];
+
+  const overtimeNotes =
+    summary && (summary.overtime_full_days || summary.overtime_total_hours)
+      ? [
+          `Converted days: ${summary.overtime_full_days ?? 0}`,
+          `Hours logged: ${summary.overtime_total_hours.toFixed(2)}`,
+        ]
+      : undefined;
+
+  const salaryNotes: string[] = [];
+  if (summary?.salary_paid_amount) {
+    salaryNotes.push(`Amount: ${formatCurrency(summary.salary_paid_amount)}`);
+  }
+  if (summary?.salary_paid_note) {
+    salaryNotes.push(summary.salary_paid_note);
+  }
+  if (summary?.salary_paid_advance_reduction) {
+    salaryNotes.push(
+      `Advance reduced: ${formatCurrency(summary.salary_paid_advance_reduction)}; extra advance: ${formatCurrency(
+        summary.salary_paid_additional_advance ?? "0"
+      )}`
+    );
+  }
+  if (summary?.salary_remaining_initial_advance) {
+    salaryNotes.push(`Remaining initial advance: ${formatCurrency(summary.salary_remaining_initial_advance)}`);
+  }
+  if (summary?.salary_pending_advance_after) {
+    salaryNotes.push(`Pending advance after payout: ${formatCurrency(summary.salary_pending_advance_after)}`);
+  }
+
+  const payrollRows: InfoRow[] = [
+    {
+      label: "Penalty deduction",
+      value: summary ? formatCurrency(summary.penalty_deduction_amount ?? "0") : "—",
+    },
+    {
+      label: "Overtime credit",
+      value: summary ? formatCurrency(summary.overtime_credit_amount ?? "0") : "—",
+      note: overtimeNotes,
+    },
+    {
+      label: "Net payable",
+      value: summary ? formatCurrency(summary.net_payable) : "—",
+      highlight: true,
+    },
+    {
+      label: "Salary status",
+      value: summary?.salary_paid
+        ? `Paid ${summary.salary_paid_on ? new Date(summary.salary_paid_on).toLocaleDateString() : ""}`
+        : "Pending",
+      note: salaryNotes.length ? salaryNotes : undefined,
+    },
+  ];
 
   return (
     <section>
@@ -141,72 +286,126 @@ const EmployeeDetail = () => {
 
       {error && <p className="alert alert--error">{error}</p>}
 
-      <div className="stats-grid">
-        <article className="stat-card">
-          <p>Monthly salary</p>
-          <h3>{summary ? formatCurrency(summary.monthly_salary) : "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Initial advance</p>
-          <h3>{summary ? formatCurrency(summary.initial_advance ?? 0) : "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Advances this month</p>
-          <h3>{summary ? formatCurrency(summary.total_month_advances) : "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Total advances</p>
-          <h3>{summary ? formatCurrency(summary.total_advances) : "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Present days</p>
-          <h3>{summary?.present_days ?? "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Full days</p>
-          <h3>{summary?.full_days ?? "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Half days</p>
-          <h3>{summary?.half_days ?? "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Paid leaves</p>
-          <h3>{summary?.paid_leave_days ?? "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Unpaid leaves</p>
-          <h3>{summary?.unpaid_leave_days ?? "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Hours worked</p>
-          <h3>{summary ? summary.total_worked_hours.toFixed(2) : "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Penalty Fridays</p>
-          <h3>{summary?.penalty_fridays ?? 0}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Overtime credit days</p>
-          <h3>{summary?.overtime_full_days ?? 0}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Penalty deduction</p>
-          <h3>{summary ? formatCurrency(summary.penalty_deduction_amount) : "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Overtime credit</p>
-          <h3>{summary ? formatCurrency(summary.overtime_credit_amount) : "—"}</h3>
-        </article>
-        <article className="stat-card">
-          <p>Per-day salary ({month})</p>
-          <h3>{summary ? formatCurrency(summary.per_day_salary_for_month) : "—"}</h3>
-        </article>
-        <article className="stat-card highlight">
-          <p>Net payable</p>
-          <h3>{summary ? formatCurrency(summary.net_payable) : "—"}</h3>
-        </article>
+      <div className="detail-panels">
+        <section className="detail-panel">
+          <header className="detail-panel__header">
+            <p className="panel-label">Compensation</p>
+            <h3>Compensation & Advances</h3>
+            <p>Baseline pay, monthly earnings, and advance health for {employeeName}.</p>
+          </header>
+          <div className="info-table">
+            {compensationRows.map((row) => (
+              <div key={row.label} className="info-row">
+                <div className="info-label">{row.label}</div>
+                <div className="info-value">
+                  <strong>{row.value}</strong>
+                  {row.note &&
+                    row.note.map((noteLine, index) => (
+                      <span key={`${row.label}-${index}`} className="info-note">
+                        {noteLine}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="detail-panel">
+          <header className="detail-panel__header">
+            <p className="panel-label">Attendance</p>
+            <h3>Attendance & Leave Summary</h3>
+            <p>Track presence, leave mix, and total time captured for the selected month.</p>
+          </header>
+          <div className="metric-grid">
+            {attendanceMetrics.map((metric) => (
+              <article key={metric.label} className="metric-card">
+                <p>{metric.label}</p>
+                <h4>{metric.value}</h4>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="detail-panel">
+          <header className="detail-panel__header">
+            <p className="panel-label">Payroll</p>
+            <h3>Adjustments & Status</h3>
+            <p>Penalty, overtime, and payout status for the pay period.</p>
+          </header>
+          <div className="info-table">
+            {payrollRows.map((row) => (
+              <div key={row.label} className={`info-row${row.highlight ? " info-row--highlight" : ""}`}>
+                <div className="info-label">{row.label}</div>
+                <div className="info-value">
+                  <strong>{row.value}</strong>
+                  {row.note &&
+                    row.note.map((noteLine, index) => (
+                      <span key={`${row.label}-${index}`} className="info-note">
+                        {noteLine}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
+
+      {isSuperAdmin && (
+        <section style={{ marginTop: "2rem" }}>
+          <div className="section-header" style={{ marginBottom: "0.5rem" }}>
+            <h3>Salary payments</h3>
+          </div>
+          {paymentsError && <p className="alert alert--error">{paymentsError}</p>}
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Paid amount</th>
+                <th>Extra advance</th>
+                <th>Advance reduction</th>
+                <th>Initial advance after</th>
+                <th>Carry forward</th>
+                <th>Pending after</th>
+                <th>Paid on</th>
+                <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingPayments ? (
+                  <tr>
+                  <td colSpan={9} className="table-empty">
+                      Loading salary payments…
+                    </td>
+                  </tr>
+                ) : salaryPayments.length ? (
+                  salaryPayments.map((payment) => (
+                    <tr key={payment.id}>
+                      <td>{payment.month}</td>
+                      <td>{formatCurrency(payment.paid_amount)}</td>
+                    <td>{formatCurrency(payment.additional_advance)}</td>
+                    <td>{formatCurrency(payment.advance_reduction_amount)}</td>
+                    <td>{formatCurrency(payment.initial_advance_after)}</td>
+                    <td>{formatCurrency(payment.carry_forward_advance)}</td>
+                    <td>{formatCurrency(payment.pending_advance_after)}</td>
+                      <td>{new Date(payment.paid_on).toLocaleString()}</td>
+                      <td>{payment.note ?? "—"}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                  <td colSpan={9} className="table-empty">
+                      No salary payments recorded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <h3 style={{ marginTop: "2rem" }}>Attendance</h3>
       <div className="table-wrapper">
